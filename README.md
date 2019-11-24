@@ -47,7 +47,7 @@ Once I received the the Heltec microprocessor with the OLED display, I created s
 
 ------
 
-###Reference Docs
+### Reference Docs
 
 * GiPyF (https://github.com/pyatka/gipyf)
 * [Maximizing MicroPython Speed](http://docs.micropython.org/en/v1.9.3/pyboard/reference/speed_python.html)
@@ -57,7 +57,7 @@ Once I received the the Heltec microprocessor with the OLED display, I created s
 
 ------
 
-###Development Shortcuts/Tips
+### Development Shortcuts/Tips
 
 #### Install some files and connect using Screen to the board
 
@@ -75,7 +75,7 @@ y
 
 
 
-####Soft boot MicroPython when connected with Screen
+#### Soft boot MicroPython when connected with Screen
 
 ```
 ctrl-d
@@ -88,7 +88,7 @@ import machine
 machine.reset()
 ```
 
-####Remove image`cache` directory
+#### Remove image`cache` directory
 
 ```shell
 ampy --port /dev/tty.SLAB_USBtoUART rmdir cache_fuzzy
@@ -102,18 +102,18 @@ ampy --port /dev/tty.SLAB_USBtoUART ls
 
 ------
 
-###Source GIF File
+### Source GIF File
 
-![fuzzy](/Users/carl/dev/github/carledwards/micropython-gif-viewer/fuzzy.gif)
+![fuzzy](fuzzy.gif)
 
 
 
 ### Initialization (first pass)
 
-![fuzzy_init_oled](/Users/carl/dev/github/carledwards/micropython-gif-viewer/images/fuzzy_init_oled.png)
+![fuzzy_init_oled](images/fuzzy_init_oled.png)
 
 
 
 ### GIF Displayed on OLED
 
-![fuzzy_oled](/Users/carl/dev/github/carledwards/micropython-gif-viewer/images/fuzzy_oled.png)
+![fuzzy_oled](images/fuzzy_oled.png)
