@@ -338,7 +338,7 @@ class Image:
             if self.debug:
                 print("unpack_binary_data - 6")
 
-            if lzw_table.is_end(block) or lzw_table.is_clear(block):
+            if lzw_table.is_end(block) or lzw_table.is_clear(block) or dataByte == len(binary_data) - 1:
                 if self.debug:
                     print("unpack_binary_data - 7, result: ", result)
                 while result:
