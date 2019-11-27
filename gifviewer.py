@@ -3,15 +3,14 @@ from gipyf import GiPyF
 from gipyf import Image
 import os
 import json
-import time
+import utime
 import sys
 import os
 import stat
+import machine
 
 _play_delay = None 
-_is_micropython = sys.platform in ('esp32')
 _oled = None
-_display_buffer = None
 
 class ImageProcessingCallbacks:
     def __init__(self, cache_dir, image_name, gif):
@@ -32,15 +31,14 @@ class ImageProcessingCallbacks:
         _play_delay = play_delay
 
     def frame_cb(self, frame_number, image):
-        global _start_time, _play_delay, _is_micropython
+        global _start_time, _play_delay
 
-        if _is_micropython:
-            global _oled
-            _oled.fill(0)
-            _oled.text("Initializing", 1, 1)
-            _oled.text("processsing", 1, 10)
-            _oled.text("frame: %d" % frame_number, 1, 20)
-            _oled.show()
+        global _oled
+        _oled.fill(0)
+        _oled.text("Initializing", 1, 1)
+        _oled.text("processsing", 1, 10)
+        _oled.text("frame: %d" % frame_number, 1, 20)
+        _oled.show()
 
         print("writing frame cache:", frame_number)
         # write the frame details to a local JSON file on the microcontroller
@@ -63,45 +61,28 @@ def create_gif_image_files(cache_dir, image_name):
     f.flush()
     f.close
 
-def soft_reset():
-    global _is_micropython
-    if _is_micropython:
-        import machine
-        machine.reset()
+def sleep_remaining_frame_delay_time(start_time_ms, frame_delay):
+    if start_time_ms and frame_delay:
+        delay_in_ms = frame_delay[0] * 10  # play_delay is defined in 1/100th second
+        delta_in_ms = utime.ticks_diff(utime.ticks_ms(), start_time_ms)
+        delay_in_ms = delay_in_ms - delta_in_ms
+        if delay_in_ms > 0:
+            utime.sleep(delay_in_ms/1000)
+        else:
+            print("frame parsing took too long, delta: ", delta_in_ms, "delay: ", delay_in_ms)
 
 @micropython.native
-def set_pixel(x, y, value):
-    global _oled
-    _oled.pixel(127-y, x, 1 if value else 0)
-
-#
-# uncomment function below if running on a pc
-#
-# def set_pixel(x, y, value):
-#     global _is_micropython
-#     if _is_micropython:
-#         print("\n *** please comment out this version of set_pixel *** \n")
-#     global _display_buffer
-#     _display_buffer[y][x] = ' ' if value else '*'
-
-@micropython.native
-def get_next_x_and_y(width, top_left_x, current_x, current_y):
-    x = current_x
-    y = current_y
-    x = x + 1
-    if x >= top_left_x + width:
-        x = top_left_x
-        y = y + 1
-    return (x, y)
-
 def show_gif_frames(image_map, cache_dir, image_name):
-    global _is_micropython
+    global _oled
+
+    pixel = _oled.framebuf.pixel
+
+    play_delay = None
+    prev_play_delay = None
+    frame_start_time = None
 
     image_frame_index = 1
     while True:
-        if not _is_micropython:
-            print('show_gif_frames:', image_frame_index)
-
         image_file_name = "%s_%d.bin" % ("/".join((cache_dir, image_name)), image_frame_index)
         try:
             # see if the file exists
@@ -109,11 +90,10 @@ def show_gif_frames(image_map, cache_dir, image_name):
         except OSError:
             # there are no more *_n.bin files left, reset and start from the beginning
             image_frame_index = 1
-            time.sleep(5)
-            if not _is_micropython:
-                global _display_buffer
-                _display_buffer = [[0 for i in range(64)] for j in range(128)]
+            sleep_remaining_frame_delay_time(frame_start_time, play_delay)
             continue
+
+        prev_play_delay = play_delay
 
         f = open(image_file_name, "r")
         play_delay, width, height, top_left_x, top_left_y, image_data = json.load(f)
@@ -122,42 +102,74 @@ def show_gif_frames(image_map, cache_dir, image_name):
         current_x = top_left_x
         current_y = top_left_y
 
+        max_x = top_left_x + width
+
         # decompress the image data into a 0-based buffer
         for data_index in image_data:
             for entry in image_map[data_index]:
                 if isinstance(entry, int):
-                    set_pixel(current_x, current_y, (entry & 0x80)>>7)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x40)>>6)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x20)>>5)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x10)>>4)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x08)>>3)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x04)>>2)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x02)>>1)
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
-                    set_pixel(current_x, current_y, (entry & 0x01))
-                    current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
+                    pixel(127-current_y, current_x, (entry & 0x80)>>7)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x40)>>6)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x20)>>5)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x10)>>4)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x08)>>3)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x04)>>2)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x02)>>1)
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
+
+                    pixel(127-current_y, current_x, (entry & 0x01))
+                    current_x += 1
+                    if current_x >= max_x:
+                        current_x = top_left_x
+                        current_y += 1
                 else:
                     for item in entry:
-                        set_pixel(current_x, current_y, item)
-                        current_x, current_y = get_next_x_and_y(width, top_left_x, current_x, current_y)
+                        pixel(127-current_y, current_x, 1 if item else 0)
+                        current_x += 1
+                        if current_x >= max_x:
+                            current_x = top_left_x
+                            current_y += 1
 
-        # show the image
-        if _is_micropython:
-            global _oled
-            _oled.show()
-        else:
-            global _display_buffer
-            for y in range(0,128):
-                print(" ".join(_display_buffer[y]))
+        sleep_remaining_frame_delay_time(frame_start_time, prev_play_delay)
+        prev_Play_delay = None
+        frame_start_time = utime.ticks_ms()
 
-        time.sleep(.05)
-        image_frame_index = image_frame_index + 1
+        _oled.show() # this takes ~40ms to complete
+
+        image_frame_index += 1
 
 
 def load_gif_image_map(cache_dir, image_name):
@@ -171,18 +183,13 @@ def load_gif_image_map(cache_dir, image_name):
         return None
 
 def init_display():
-    global _is_micropython, _display_buffer
-
-    if _is_micropython:
-        global _oled
-        import machine, ssd1306
-        from machine import Pin
-        oled_rst = Pin(16, Pin.OUT)
-        oled_rst.value(1)
-        i2c = machine.I2C(scl=machine.Pin(15), sda=machine.Pin(4))
-        _oled = ssd1306.SSD1306_I2C(128, 64, i2c)
-    else:
-        _display_buffer = [[0 for i in range(64)] for j in range(128)]
+    global _oled
+    import machine, ssd1306
+    from machine import Pin
+    oled_rst = Pin(16, Pin.OUT)
+    oled_rst.value(1)
+    i2c = machine.I2C(scl=machine.Pin(15), sda=machine.Pin(4))
+    _oled = ssd1306.SSD1306_I2C(128, 64, i2c)
 
 
 def run(image_name):
@@ -207,8 +214,9 @@ def run(image_name):
         os.mkdir(cache_dir)
         create_gif_image_files(cache_dir, image_name)
         # let the OS finish writing files
-        time.sleep(1)
+        utime.sleep(1)
         # at this point, the cache directory should be fully populated
         # time to move on to displaying the frames
         # reset the device to reset the memory, which will restart the main app
-        soft_reset()
+        machine.reset()
+

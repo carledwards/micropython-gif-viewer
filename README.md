@@ -19,14 +19,13 @@ The second time you execute the gif viewer, it  will read in each of the frames 
 
 ### Notes
 
-* If you want to run gifviewer from your pc, you will need to comment out the `@micropython.native` lines in `gifviewer.py` and `gipyf.py`.  Also, the `set_pixel` function in `gifviewer.py` will need to be uncommented as well
-* This utility will run under python 2.7
 * Gif parsing library used is GiPyF (https://github.com/pyatka/gipyf) and was modified with the following changes:
   * Added support for Python 2.7
   * Reduce the overall memory usage by using callbacks, removed the generator, optimized the LZW tables
 * There are sprinkels of `gc.collect()` throughout the code when initially parsing the gif image.  Without these, the applicaiton will crash by running out of memory
 * I have not tested any other GIF images other than the `fuzzy.gif` that I have provided in this example.  The `fuzzy.gif` was handmade by me to specifically fit the `64x128` image constraints of the OLED
 * Using more than 2 colors will most likely crash the app.  It uses the `0` and `1` for the colors to compress the images into binary
+* Having a short delay between frames might be shown longer than specified depending on the number of pixels being changed.  The first time displaying a frame will force all pixels to be processed.  Parsing a frame that contains a change to every pixel takes ~145ms before sending it off to the OLED to be displayed.  The `OLED.show()` always takes ~40ms from start-to-finish.  The total time, with all pixels changing, is ~185ms.
 
 ------
 
@@ -42,7 +41,6 @@ Once I received the the Heltec microprocessor with the OLED display, I created s
 * Memory becomes very fragmented, running `gc.collect()` has really helped.
 * Using the local disk has made this project actually possible.  There just wasn't enough available memory to do both parsing and displaying within the same pass.
 * Using the decorator `@micropython.native` has been helpful in making the app go faster, but found that it can cause the entire Micropython VM to crash.
-* I was unable to find a way to have the `@micropython.native` decorator to be conditional (so that I could just use the same source files on the MicroPython board and the pc at the same time)
 * I'm sure there are many more things I can do to speed this up, but the goal was to "get it working".  This documentation was very helpful in giving me ideas and things to try: [Maximizing MicroPython Speed](http://docs.micropython.org/en/v1.9.3/pyboard/reference/speed_python.html)
 
 ------

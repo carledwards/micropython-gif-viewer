@@ -73,6 +73,7 @@ class SSD1306:
     def invert(self, invert):
         self.write_cmd(SET_NORM_INV | (invert & 1))
 
+    @micropython.native
     def show(self):
         x0 = 0
         x1 = self.width - 1
@@ -88,9 +89,11 @@ class SSD1306:
         self.write_cmd(self.pages - 1)
         self.write_framebuf()
 
+    @micropython.native
     def fill(self, col):
         self.framebuf.fill(col)
 
+    @micropython.native
     def pixel(self, x, y, col):
         self.framebuf.pixel(x, y, col)
 
